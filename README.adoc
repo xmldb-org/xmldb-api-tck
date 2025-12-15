@@ -1,0 +1,79 @@
+= XML:DB API TCK (Technology Compatibility Kit)
+Patrick Reinhart <https://github.com/reinhapa[@reinhapa]>
+:group-name: net.sf.xmldb-org
+:project-org: xmldb-org
+:project-name: xmldb-api-tck
+:project-full-path: {project-org}/{project-name}
+:project-version: 0.1.0-SNAPSHOT
+:github-branch: main
+:java-version: 21
+
+image:https://img.shields.io/badge/license-XML:DB-blue.svg["Apache License Software License", link="https://github.com/{project-full-path}/blob/{github-branch}/LICENSE"]
+image:https://img.shields.io/github/release/{project-full-path}.svg["Release", link="https://github.com/{project-full-path}/releases"]
+image:https://img.shields.io/maven-central/v/{group-name}/{project-name}.svg?label=Maven%20Central["Maven Central", link="https://search.maven.org/search?q=g:%22{group-name}%22%20AND%20a:%22{project-name}%22"]
+image:https://sonarcloud.io/api/project_badges/measure?project={project-org}_{project-name}&metric=alert_status["Quality Gate Status", link ="https://sonarcloud.io/summary/new_code?id={project-org}_{project-name}"]
+image:https://javadoc.io/badge2/{group-name}/{project-name}/javadoc.svg["javadoc", link="https://javadoc.io/doc/{group-name}/{project-name}"]
+image:https://github.com/{project-full-path}/actions/workflows/gradle.yml/badge.svg["CI", link="https://github.com/{project-full-path}/actions/workflows/gradle.yml"]
+
+
+Supported Java versions:
+image:https://img.shields.io/badge/Java-{java-version}-blue.svg["Java {java-version}", link="https://adoptium.net/"]
+
+== Content
+Contains the XML:DB API TCK (Technology Compatibility Kit) to verify a database implementation.
+
+== Building
+The XML:DB TCK code can be built as a JAR file and is based on the XML:DB API definition.
+
+Java {java-version} or later is required to build the JAR file.
+
+[source,bash,subs="attributes"]
+----
+$ git clone https://github.com/{project-full-path}.git
+$ cd {project-name}
+$ gradlew build
+----
+
+The JAR file will be located in the `build/libs` folder.
+
+== Getting the binaries for your build:
+The latest versions of the API are available at https://search.maven.org/search?q=g:{group-name}
+
+== Using the TCK within your project
+
+[source,groovy,subs="attributes"]
+----
+configurations {
+  tckTests {
+    canBeConsumed = false
+    canBeResolved = true
+    extendsFrom testImplementation, testRuntimeOnly
+  }
+}
+
+dependencies {
+  tckTests  '{group-name}:{project-name}:{project-version}'
+  testRuntimeOnly 'org.junit.platform:junit-platform-console:6.0.1'
+}
+
+tasks.register('runTck', JavaExec) {
+  group = 'verification'
+  description = 'Runs the TCK tests from the tck source set (for TCK authors)'
+  mainClass = 'org.junit.platform.console.ConsoleLauncher'
+  classpath = files(configurations.tckTests, sourceSets.test.runtimeClasspath)
+  args    'execute',
+          '--details=tree',
+          '--select-package=org.xmldb.tck.tests',
+          '--reports-dir',
+          "${layout.buildDirectory.dir('tck-reports').get().getAsFile()}"
+}
+----
+
+
+
+== Contribute
+Contributions are always welcome. Use https://google.github.io/styleguide/javaguide.html[Google code style format] for your changes.
+
+
+== License
+This project is licensed under the https://github.com/{project-full-path}/blob/{github-branch}/LICENSE[Apache License Software License]

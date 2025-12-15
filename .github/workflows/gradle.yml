@@ -1,0 +1,67 @@
+# This workflow will build a Java project with Gradle
+# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-gradle
+
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  codacy-analysis-cli:
+    runs-on: ubuntu-latest
+    name: Codacy Analysis CLI
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run codacy-analysis-cli
+        uses: codacy/codacy-analysis-cli-action@master
+  build:
+    name: ${{ matrix.os }} / OpenJDK ${{ matrix.jdk }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        jdk: ['21']
+        os: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up JDK ${{ matrix.jdk }}
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: ${{ matrix.jdk }}
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+    - name: Build with Gradle
+      run: ./gradlew check
+# enable when public
+#    - name: SonarQube
+#      if:  ${{ matrix.jdk == '21' }}
+#      env:
+#        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+#      run: ./gradlew sonarqube -PsonarToken=${{ secrets.SONAR_TOKEN }}
+    - name: Run codecov analysis
+      uses: codecov/codecov-action@v5
+  deploy:
+    if: ${{ github.event_name != 'pull_request' }}
+    needs: [ build, codacy-analysis-cli ]
+    runs-on: ubuntu-latest
+    name: Deploy
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Set up JDK
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: '21'
+    - name: Deploy
+      env:
+        ORG_GRADLE_PROJECT_signingKey: ${{ secrets.GPG_SIGNING_KEY }}
+        ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.GPG_PASSPHRASE }}
+        ORG_GRADLE_PROJECT_sonatypeUsername: ${{ secrets.SONATYPE_USERNAME }}
+        ORG_GRADLE_PROJECT_sonatypePassword: ${{ secrets.SONATYPE_PASSWORD }}
+      run: ./gradlew publish --no-daemon

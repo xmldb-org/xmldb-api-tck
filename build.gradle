@@ -1,0 +1,133 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License") you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0 Unless required by applicable law or agreed to in
+ * writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific
+ * language governing permissions and limitations under the License.
+ */
+
+plugins {
+  id 'java-library'
+  id 'maven-publish'
+  id 'signing'
+  id 'com.diffplug.spotless' version '8.1.0'
+  id 'net.ltgt.errorprone' version '4.3.0'
+}
+
+group = 'net.sf.xmldb-org'
+
+java {
+  toolchain { languageVersion.set(JavaLanguageVersion.of(21)) }
+  withJavadocJar()
+  withSourcesJar()
+}
+
+repositories {
+  mavenCentral()
+  maven { url = 'https://central.sonatype.com/repository/maven-snapshots/' }
+}
+
+dependencies {
+//  implementation 'net.sf.xmldb-org:xmldb-api:1.7.0'
+  implementation 'net.sf.xmldb-org:xmldb-api:3.0.0-SNAPSHOT'
+
+  implementation 'io.smallrye.config:smallrye-config:3.12.4'
+  implementation 'net.datafaker:datafaker:2.5.3'
+  implementation 'org.assertj:assertj-core:3.27.6'
+  implementation 'org.junit.jupiter:junit-jupiter-params:6.0.1'
+
+  errorprone 'com.google.errorprone:error_prone_core:2.42.0'
+
+  testRuntimeOnly 'org.junit.platform:junit-platform-runner:1.14.1'
+  testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:6.0.1'
+}
+
+compileJava {
+  options.compilerArgs << '-Xlint:unchecked'
+  options.errorprone {
+    allErrorsAsWarnings = false
+    disableWarningsInGeneratedCode = true
+  }
+}
+
+jar {
+  manifest.attributes 'Implementation-Title': 'XML:DB API TCK',
+                      'Automatic-Module-Name': "org.xmldb.tck"
+}
+
+tasks.withType(JavaCompile).configureEach {
+  dependsOn 'spotlessJavaApply'
+}
+
+spotless {
+  java {
+    eclipse().configFile('gradle/project-style.xml')
+    importOrderFile('gradle/project.importorder')
+    licenseHeaderFile('gradle/LICENSE_HEADER_java')
+  }
+}
+
+test {
+  useJUnitPlatform()
+  testLogging {
+    events 'skipped'
+  }
+}
+
+publishing {
+  repositories {
+    maven {
+      name = 'Sonatype'
+      def releasesRepoUrl = 'https://ossrh-staging-api.central.sonatype.com/service/local/'
+      def snapshotsRepoUrl = 'https://central.sonatype.com/repository/maven-snapshots/'
+      url = version.toString().endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
+
+      credentials {
+        username = findProperty('sonatypeUsername') ?: System.getenv('SONATYPE_USERNAME')
+        password = findProperty('sonatypePassword') ?: System.getenv('SONATYPE_PASSWORD')
+      }
+    }
+  }
+  publications {
+    mavenJava(MavenPublication) {
+      from components.java
+
+      pom {
+        name = 'XML:DB TCK'
+        url = 'https://github.com/xmldb-org'
+        description = 'XML:DB TCK (Technology Compatibility Kit)'
+
+        licenses {
+          license {
+            name = 'The Apache License, Version 2.0'
+            url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+          }
+        }
+
+        developers {
+          developer {
+            id = 'reinhapa'
+            name = 'Patrick Reinhart'
+            email = 'patrick@reini.net'
+          }
+        }
+        scm {
+          connection = 'scm:git:git://github.com/xmldb-org/xmldb-api-tck.git'
+          developerConnection = 'scm:git:ssh://github.com/xmldb-org/xmldb-api-tck.git'
+          url = 'https://github.com/xmldb-org/xmldb-api-tck'
+        }
+      }
+    }
+  }
+}
+signing {
+  required = !version.toString().endsWith('SNAPSHOT') && gradle.taskGraph.hasTask("publish")
+  sign publishing.publications.mavenJava
+}
+
+normalization {
+  runtimeClasspath {
+    ignore '/META-INF/MANIFEST.MF'
+  }
+}
