@@ -32,7 +32,7 @@ dependencies {
 //  implementation 'net.sf.xmldb-org:xmldb-api:1.7.0'
   implementation 'net.sf.xmldb-org:xmldb-api:3.0.0-SNAPSHOT'
 
-  implementation 'io.smallrye.config:smallrye-config:3.14.1'
+  implementation 'io.smallrye.config:smallrye-config:3.15.0'
   implementation 'net.datafaker:datafaker:2.5.3'
   implementation 'org.assertj:assertj-core:3.27.6'
   implementation 'org.junit.jupiter:junit-jupiter-params:6.0.1'
