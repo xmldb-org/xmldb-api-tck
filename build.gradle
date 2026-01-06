@@ -35,12 +35,12 @@ dependencies {
   implementation 'io.smallrye.config:smallrye-config:3.15.0'
   implementation 'net.datafaker:datafaker:2.5.3'
   implementation 'org.assertj:assertj-core:3.27.6'
-  implementation 'org.junit.jupiter:junit-jupiter-params:6.0.1'
+  implementation 'org.junit.jupiter:junit-jupiter-params:6.0.2'
 
   errorprone 'com.google.errorprone:error_prone_core:2.45.0'
 
-  testRuntimeOnly 'org.junit.platform:junit-platform-runner:1.14.1'
-  testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:6.0.1'
+  testRuntimeOnly 'org.junit.platform:junit-platform-runner:1.14.2'
+  testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:6.0.2'
 }
 
 compileJava {
