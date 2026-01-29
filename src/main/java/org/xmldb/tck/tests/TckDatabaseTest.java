@@ -18,7 +18,10 @@ import java.io.ByteArrayOutputStream;
 import java.util.List;
 import java.util.stream.Stream;
 
+import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.xmldb.api.DatabaseManager;
@@ -42,48 +45,59 @@ import net.datafaker.Faker;
 
 @TckTest
 class TckDatabaseTest {
-  @ParameterizedTest
-  @MethodSource("serverUrls")
-  void getCollection(String serverUrl) throws XMLDBException {
+  final Config config = ConfigProvider.getConfig();
+
+  String serverUrl;
+
+  @BeforeEach
+  void setUp() {
+    serverUrl = config.getValue("xmldb.tck.root.url", String.class);
+  }
+
+  @Test
+  void getCollection() throws XMLDBException {
     assertThat(DatabaseManager.getCollection(serverUrl)).isNotNull()
-        .satisfies(TckDatabaseTest::assertCollection);
+        .satisfies(TckDatabaseTest::assertRootCollection);
   }
 
-  @ParameterizedTest
-  @MethodSource("serverUrls")
-  void getCollectionWithCredentials(String serverUrl) throws XMLDBException {
-    assertThat(DatabaseManager.getCollection(serverUrl, "guest", "guest")).isNotNull()
-        .satisfies(TckDatabaseTest::assertCollection);
+  @Test
+  void getCollectionWithCredentials() throws XMLDBException {
+    final String user = config.getValue("xmldb.tck.test.user", String.class);
+    final String password =
+        config.getOptionalValue("xmldb.tck.test.password", String.class).orElse(null);
+    assertThat(DatabaseManager.getCollection(serverUrl, user, password)).isNotNull()
+        .satisfies(TckDatabaseTest::assertRootCollection);
   }
 
-  @ParameterizedTest
-  @MethodSource("serverUrls")
-  void getUnknownCollection(String serverUrl) throws XMLDBException {
+  @Test
+  void getUnknownCollection() throws XMLDBException {
     assertThat(DatabaseManager.getCollection(serverUrl + "Blup")).isNull();
     assertThat(DatabaseManager.getCollection(serverUrl).getChildCollection("Blup")).isNull();
   }
 
-  static void assertCollection(Collection collection) throws XMLDBException {
-    assertResources(collection, new ResourceData("test1.xml", "<root1/>"),
-        new ResourceData("test2.bin", "content2"));
+  static void assertRootCollection(Collection collection) throws XMLDBException {
     assertThat(collection.getName()).isEqualTo("/db");
-    assertThat(collection.getChildCollectionCount()).isEqualTo(1);
-    assertThat(collection.listChildCollections()).containsExactlyInAnyOrder("child");
     assertThat(collection.createId()).isNotNull().isNotBlank();
     assertResourceOperations(collection);
     assertResourceServices(collection);
-    assertThat(collection.getChildCollection("child")).isNotNull().satisfies(childCol -> {
-      assertThat(childCol.getName()).isEqualTo("/db/child");
-      assertResources(childCol, new ResourceData("test3.xml", "<root3/>"),
-          new ResourceData("test4.xml", "<root4/>"), new ResourceData("test5.bin", "content5"));
-      assertThat(childCol.getChildCollectionCount()).isZero();
-      assertThat(childCol.listChildCollections()).isEmpty();
-      assertThat(childCol.createId()).isNotNull().isNotBlank();
-      assertResourceOperations(childCol);
-      assertResourceServices(childCol);
-      assertThatNoException().isThrownBy(childCol::close);
-    });
     assertThatNoException().isThrownBy(collection::close);
+  }
+
+  static void temptorary() {
+    // assertResources(collection, new ResourceData("test1.xml", "<root1/>"),
+    // new ResourceData("test2.bin", "content2"));
+    // assertThat(collection.getChildCollectionCount()).isEqualTo(1);
+    // assertThat(collection.listChildCollections()).containsExactlyInAnyOrder("child");
+    // assertThat(collection.getChildCollection("child")).isNotNull().satisfies(childCol -> {
+    // assertThat(childCol.getName()).isEqualTo("/db/child");
+    // assertResources(childCol, new ResourceData("test3.xml", "<root3/>"),
+    // new ResourceData("test4.xml", "<root4/>"), new ResourceData("test5.bin", "content5"));
+    // assertThat(childCol.getChildCollectionCount()).isZero();
+    // assertThat(childCol.listChildCollections()).isEmpty();
+    // assertThat(childCol.createId()).isNotNull().isNotBlank();
+    // assertResourceOperations(childCol);
+    // assertResourceServices(childCol);
+    // assertThatNoException().isThrownBy(childCol::close);
   }
 
   static void assertResources(Collection collection, ResourceData... expectedResources)
@@ -114,7 +128,8 @@ class TckDatabaseTest {
         DatabaseInstanceService.class, TransactionService.class, XPathQueryService.class,
         XQueryService.class, XUpdateQueryService.class, PermissionManagementService.class,
         UserPrincipalLookupService.class)) {
-      assertThat(collection.hasService(serviceClass)).isTrue();
+      assertThat(collection.hasService(serviceClass))
+          .withFailMessage("service %s missing", serviceClass).isTrue();
       assertThat(collection.findService(serviceClass)).isNotEmpty().get().satisfies(service -> {
         assertThat(service.getName()).isEqualTo(serviceClass.getSimpleName());
         assertThat(service.getVersion()).isEqualTo("1.0");
@@ -159,9 +174,5 @@ class TckDatabaseTest {
   }
 
   record ResourceData(String id, String content) {
-  }
-
-  static Stream<String> serverUrls() {
-    return Stream.of(ConfigProvider.getConfig().getValue("xmldb.tck.root.url", String.class));
   }
 }

@@ -69,7 +69,21 @@ tasks.register('runTck', JavaExec) {
 }
 ----
 
+Define the needed properties to use your database implementation by creating an according `src/test/resources/META-INF/microprofile-config.properties` file:
 
+[source,text,subs="attributes"]
+----
+# required values
+xmldb.tck.database.class=<1>
+xmldb.tck.root.url=xmldb\:<2>
+xmldb.tck.test.collection=tck-tests
+xmldb.tck.test.user=<3>
+
+# optional values
+#xmldb.tck.test.password=<default empty>
+----
+1 xxx
+2 xx
 
 == Contribute
 Contributions are always welcome. Use https://google.github.io/styleguide/javaguide.html[Google code style format] for your changes.
