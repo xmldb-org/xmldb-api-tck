@@ -59,13 +59,14 @@ dependencies {
 tasks.register('runTck', JavaExec) {
   group = 'verification'
   description = 'Runs the TCK tests from the tck source set (for TCK authors)'
-  mainClass = 'org.junit.platform.console.ConsoleLauncher'
-  classpath = files(configurations.tckTests, sourceSets.test.runtimeClasspath)
-  args    'execute',
-          '--details=tree',
-          '--select-package=org.xmldb.tck.tests',
-          '--reports-dir',
-          "${layout.buildDirectory.dir('tck-reports').get().getAsFile()}"
+  useJUnitPlatform()
+  // Set classpath to include the TCK jar and test dependencies
+  classpath = configurations.tckTests + sourceSets.test.runtimeClasspath
+  // Try to use zipTree to explode the TCK jar
+  testClassesDirs = files(configurations.tckTests.files.findAll { it.name.contains('tck') }.collect { zipTree(it) })
+  filter {
+    includeTestsMatching "org.xmldb.tck.tests.*"
+  }
 }
 ----
 
@@ -76,14 +77,17 @@ Define the needed properties to use your database implementation by creating an 
 # required values
 xmldb.tck.database.class=<1>
 xmldb.tck.root.url=xmldb\:<2>
+xmldb.tck.root.collection=/db <3>
 xmldb.tck.test.collection=tck-tests
-xmldb.tck.test.user=<3>
+xmldb.tck.test.user=<4>
 
 # optional values
 #xmldb.tck.test.password=<default empty>
 ----
-1 xxx
-2 xx
+1. The database class to be validated
+2. The database URL the for the to-be-tested database root collection
+3. The simple name of the root collection
+4. The test Username that general read rights and is able to create/update and delete the test collection
 
 == Contribute
 Contributions are always welcome. Use https://google.github.io/styleguide/javaguide.html[Google code style format] for your changes.
