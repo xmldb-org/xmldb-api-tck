@@ -14,14 +14,19 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.util.List;
+import java.time.Instant;
 import java.util.stream.Stream;
 
-import org.assertj.core.api.ThrowingConsumer;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.xmldb.api.DatabaseManager;
 import org.xmldb.api.base.Collection;
 import org.xmldb.api.base.Resource;
 import org.xmldb.api.base.Service;
@@ -43,8 +48,27 @@ import net.datafaker.Faker;
 
 @TckTest
 class TckCollectionTest {
+  final Config config = ConfigProvider.getConfig();
+
   @TckResource
-  Collection collection;
+  Collection rootCollection;
+
+  Collection testCollection;
+
+  @BeforeEach
+  void setUp() throws XMLDBException {
+    final String testCollectionName = config.getValue("xmldb.tck.test.collection", String.class);
+    testCollection = rootCollection.getChildCollection(testCollectionName);
+    assertThat(testCollection)
+        .withFailMessage("configured test collection `%s` must exist", testCollectionName)
+        .isNotNull();
+    cleanTestCollection();
+  }
+
+  @AfterEach
+  void tearDown() throws XMLDBException {
+    cleanTestCollection();
+  }
 
   @ParameterizedTest
   @ValueSource(classes = {CollectionManagementService.class, DatabaseInstanceService.class,
@@ -52,39 +76,95 @@ class TckCollectionTest {
       XUpdateQueryService.class, PermissionManagementService.class,
       UserPrincipalLookupService.class})
   void testServices(Class<? extends Service> serviceClass) {
-    assertThat(collection.hasService(serviceClass))
+    assertThat(testCollection.hasService(serviceClass))
         .withFailMessage("service %s missing", serviceClass).isTrue();
-    assertThat(collection.findService(serviceClass)).isNotEmpty().get().satisfies(service -> {
+    assertThat(testCollection.findService(serviceClass)).isNotEmpty().get().satisfies(service -> {
       assertThat(service.getName()).isEqualTo(serviceClass.getSimpleName());
       assertThat(service.getVersion()).isEqualTo("1.0");
     });
   }
 
   @Test
-  void binaryResource() {
-    // tbd
+  void binaryResource() throws XMLDBException {
+    final ResourceData binaryResource = assertStoreNewBinaryResource(testCollection);
+    assertLoadAndRemoveResource(testCollection, binaryResource);
   }
 
   @Test
-  void xmlResource() {
-    // tbd
+  void xmlResource() throws XMLDBException {
+    final ResourceData xmlResource = assertStoreNewXmlResource(testCollection);
+    assertLoadAndRemoveResource(testCollection, xmlResource);
   }
 
-  static void temptorary() {
-    // assertResources(collection, new ResourceData("test1.xml", "<root1/>"),
-    // new ResourceData("test2.bin", "content2"));
-    // assertThat(collection.getChildCollectionCount()).isEqualTo(1);
-    // assertThat(collection.listChildCollections()).containsExactlyInAnyOrder("child");
-    // assertThat(collection.getChildCollection("child")).isNotNull().satisfies(childCol -> {
-    // assertThat(childCol.getName()).isEqualTo("/db/child");
-    // assertResources(childCol, new ResourceData("test3.xml", "<root3/>"),
-    // new ResourceData("test4.xml", "<root4/>"), new ResourceData("test5.bin", "content5"));
-    // assertThat(childCol.getChildCollectionCount()).isZero();
-    // assertThat(childCol.listChildCollections()).isEmpty();
-    // assertThat(childCol.createId()).isNotNull().isNotBlank();
-    // assertResourceOperations(childCol);
-    // assertResourceServices(childCol);
-    // assertThatNoException().isThrownBy(childCol::close);
+  @Test
+  void childCollectionsAndParent() throws XMLDBException {
+    final String childName = "tck-child-" + testCollection.createId();
+    final CollectionManagementService service =
+        testCollection.getService(CollectionManagementService.class);
+    try (Collection childCollection = service.createCollection(childName)) {
+      assertThat(childCollection).isNotNull();
+      assertThat(testCollection.getChildCollectionCount()).isGreaterThanOrEqualTo(1);
+      assertThat(testCollection.listChildCollections()).contains(childName);
+      assertThat(testCollection.getChildCollection(childName)).isNotNull();
+      assertThat(childCollection.getParentCollection()).isNotNull();
+      assertThat(childCollection.getParentCollection().getName())
+          .isEqualTo(testCollection.getName());
+    }
+    assertThatNoException().isThrownBy(() -> service.removeCollection(childName));
+    assertThat(testCollection.getChildCollection(childName)).isNull();
+  }
+
+  @Test
+  void resourcesAndCollectionState() throws XMLDBException {
+    assertThat(testCollection.getName()).isNotNull().isNotBlank();
+    assertThat(testCollection.isOpen()).isTrue();
+    assertThat(testCollection.getCreationTime()).isNotNull().isBeforeOrEqualTo(Instant.now());
+
+    assertResources(testCollection);
+    final String createdId = testCollection.createId();
+    assertThat(createdId).isNotNull().isNotBlank();
+
+    final ResourceData xmlResource = assertStoreNewXmlResource(testCollection);
+    final ResourceData binaryResource = assertStoreNewBinaryResource(testCollection);
+    assertResources(testCollection, xmlResource, binaryResource);
+    assertThat(testCollection.getResourceCount()).isEqualTo(2);
+    assertThat(testCollection.listResources()).containsExactlyInAnyOrder(xmlResource.id(),
+        binaryResource.id());
+  }
+
+  @Test
+  void closeCollectionHandle() throws XMLDBException {
+    final String serverUrl = config.getValue("xmldb.tck.root.url", String.class);
+    final String testCollectionName = config.getValue("xmldb.tck.test.collection", String.class);
+    final String user = config.getValue("xmldb.tck.test.user", String.class);
+    final String password =
+        config.getOptionalValue("xmldb.tck.test.password", String.class).orElse(null);
+
+    try (Collection collectionHandle =
+        DatabaseManager.getCollection(serverUrl + "/" + testCollectionName, user, password)) {
+      assertThat(collectionHandle).isNotNull();
+      assertThat(collectionHandle.isOpen()).isTrue();
+      collectionHandle.close();
+      assertThat(collectionHandle.isOpen()).isFalse();
+    }
+  }
+
+  void cleanTestCollection() throws XMLDBException {
+    for (String resourceId : testCollection.listResources()) {
+      try (Resource resource = testCollection.getResource(resourceId)) {
+        if (resource != null) {
+          testCollection.removeResource(resource);
+        }
+      }
+    }
+
+    final CollectionManagementService collectionService =
+        testCollection.getService(CollectionManagementService.class);
+    for (String childCollectionName : testCollection.listChildCollections()) {
+      collectionService.removeCollection(childCollectionName);
+    }
+    assertThat(testCollection.listResources()).isEmpty();
+    assertThat(testCollection.listChildCollections()).isEmpty();
   }
 
   static void assertResources(Collection collection, ResourceData... expectedResources)
@@ -103,20 +183,11 @@ class TckCollectionTest {
     }
   }
 
-  static void assertResourceOperations(Collection collection) throws XMLDBException {
-    ResourceData xmlResource = assertStoreNewXmlResource(collection);
-    assertLoadAndRemoveResource(collection, xmlResource);
-    ResourceData binaryResource = assertStoreNewBinaryResource(collection);
-    assertLoadAndRemoveResource(collection, binaryResource);
-  }
-
-
   static ResourceData assertStoreNewXmlResource(Collection collection) throws XMLDBException {
     try (final XMLResource resource = collection.createResource(null, XMLResource.class)) {
       assertThat(resource.getId()).isNotNull().isNotBlank();
       final String content = "<rootContent>%s</rootContent>".formatted(generateData());
-      resource.setContent(content);
-      assertThat(resource.getContent()).isEqualTo(content);
+      resource.setContentAsStream(new ByteArrayInputStream(content.getBytes(UTF_8)));
       collection.storeResource(resource);
       return new ResourceData(resource.getId(), content);
     }
@@ -126,8 +197,7 @@ class TckCollectionTest {
     try (final BinaryResource resource = collection.createResource(null, BinaryResource.class)) {
       assertThat(resource.getId()).isNotNull().isNotBlank();
       final byte[] content = generateData().getBytes(UTF_8);
-      resource.setContent(content);
-      assertThat(resource.getContent()).isEqualTo(content);
+      resource.setContentAsStream(new ByteArrayInputStream(content));
       collection.storeResource(resource);
       return new ResourceData(resource.getId(), new String(content, UTF_8));
     }

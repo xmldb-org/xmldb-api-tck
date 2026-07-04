@@ -14,6 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 
 import java.util.List;
+import java.util.Properties;
 import java.util.UUID;
 
 import org.assertj.core.api.ThrowingConsumer;
@@ -28,6 +29,8 @@ import org.xmldb.tck.util.TckTest;
 
 @TckTest
 class TckDatabaseTest {
+  private static final String PROPERTY_KEY = "xmldb.tck.test.property";
+
   final Config config = ConfigProvider.getConfig();
 
   String serverUrl;
@@ -53,6 +56,44 @@ class TckDatabaseTest {
   }
 
   @Test
+  void getCollectionWithProperties() throws XMLDBException {
+    final String user = config.getValue("xmldb.tck.test.user", String.class);
+    final String password =
+        config.getOptionalValue("xmldb.tck.test.password", String.class).orElse(null);
+    final Properties info = new Properties();
+    info.setProperty("user", user);
+    if (password != null) {
+      info.setProperty("password", password);
+    }
+    assertThat(DatabaseManager.getCollection(serverUrl, info)).isNotNull()
+        .satisfies(rootCollectionAssertions());
+  }
+
+  @Test
+  void getDatabases() {
+    assertThat(DatabaseManager.getDatabases()).isNotEmpty();
+  }
+
+  @Test
+  void getConformanceLevel() throws XMLDBException {
+    assertThat(DatabaseManager.getConformanceLevel(serverUrl)).isNotNull().isNotBlank();
+  }
+
+  @Test
+  void setAndGetProperty() {
+    final String previousValue = DatabaseManager.getProperty(PROPERTY_KEY);
+    final String value = UUID.randomUUID().toString();
+    try {
+      DatabaseManager.setProperty(PROPERTY_KEY, value);
+      assertThat(DatabaseManager.getProperty(PROPERTY_KEY)).isEqualTo(value);
+      DatabaseManager.setProperty(PROPERTY_KEY, null);
+      assertThat(DatabaseManager.getProperty(PROPERTY_KEY)).isNull();
+    } finally {
+      DatabaseManager.setProperty(PROPERTY_KEY, previousValue);
+    }
+  }
+
+  @Test
   void getUnknownCollection() throws XMLDBException {
     String collectionRoot = "/someCollection" + UUID.randomUUID();
     assertThat(DatabaseManager.getCollection(serverUrl + collectionRoot)).isNull();
@@ -60,12 +101,13 @@ class TckDatabaseTest {
         .isNull();
   }
 
-  ThrowingConsumer<Object>[] rootCollectionAssertions() {
+  @SuppressWarnings("unchecked")
+  ThrowingConsumer<Collection>[] rootCollectionAssertions() {
     String rootCollectionName = config.getValue("xmldb.tck.root.collection", String.class);
     assertThat(rootCollectionName).isNotNull();
     String testCollectionName = config.getValue("xmldb.tck.test.collection", String.class);
     assertThat(testCollectionName).isNotNull();
-    List<ThrowingConsumer<Collection>> assertions = List.of(
+    final List<ThrowingConsumer<Collection>> assertions = List.of(
         collection -> assertThat(collection.getName()).isEqualTo(rootCollectionName),
         collection -> assertThat(collection.createId()).isNotNull().isNotBlank(),
         collection -> assertThat(collection.listChildCollections()).contains(testCollectionName),

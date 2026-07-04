@@ -53,10 +53,9 @@ configurations {
 
 dependencies {
   tckTests  '{group-name}:{project-name}:{project-version}'
-  testRuntimeOnly 'org.junit.platform:junit-platform-console:6.0.1'
 }
 
-tasks.register('runTck', JavaExec) {
+tasks.register('runTck', Test) {
   group = 'verification'
   description = 'Runs the TCK tests from the tck source set (for TCK authors)'
   useJUnitPlatform()
