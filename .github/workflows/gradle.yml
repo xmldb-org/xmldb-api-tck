@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Codacy Analysis CLI
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Run codacy-analysis-cli
         uses: codacy/codacy-analysis-cli-action@master
   build:
@@ -30,7 +30,7 @@ jobs:
         jdk: ['21']
         os: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Set up JDK ${{ matrix.jdk }}
       uses: actions/setup-java@v5
       with:
@@ -47,14 +47,14 @@ jobs:
 #        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
 #      run: ./gradlew sonarqube -PsonarToken=${{ secrets.SONAR_TOKEN }}
     - name: Run codecov analysis
-      uses: codecov/codecov-action@v6
+      uses: codecov/codecov-action@v7
   deploy:
     if: ${{ github.event_name != 'pull_request' && (github.event_name != 'schedule' || github.ref == 'refs/heads/main') }}
     needs: [ build, codacy-analysis-cli ]
     runs-on: ubuntu-latest
     name: Deploy
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0
     - name: Set up JDK
